@@ -1,70 +1,133 @@
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.Scanner;
+
 public class Polynomial {
-    public double[] co;
-    /*One field representing the coefficients of the polynomial using an array of double. A polynomial is assumed to hav
-    e the form 𝑎0 + 𝑎1𝑥1 + ⋯ + 𝑎𝑛−1𝑥𝑛−1. For example, the polynomial 6 − 2𝑥 + 5𝑥3 would be represented using the array
-    [6, -2, 0, 5]*/
+    private double[] coefficients;
+    private int[] exponents;
 
-    public Polynomial(){
-        double[] new_co = new double[1];
-        co = new_co;
-        co[0] = 0.0;
+    public Polynomial() {
+        this.coefficients = new double[0];
+        this.exponents = new int[0];
     }
-    //a no-argument constructor that sets the polynomial to zero (i.e. the corresponding array would be [0])
 
-    public Polynomial(double[] coefficient){
-        co = coefficient;
+    public Polynomial(double[] coefficients, int[] exponents) {
+        this.coefficients = coefficients;
+        this.exponents = exponents;
     }
-    //a constructor that takes an array of double as an argument and sets the coefficients accordingly
 
+    public Polynomial(File file) throws IOException {
+        Scanner scanner = new Scanner(file);
+        String polynomial = scanner.nextLine();
+        scanner.close();
 
-    public Polynomial add(Polynomial another){
+        String[] terms = polynomial.split("(?=[-+])");
+        this.coefficients = new double[terms.length];
+        this.exponents = new int[terms.length];
 
-        int coefficient_length = 0;
-        if(co.length <= another.co.length){
-            coefficient_length = another.co.length;
-        }else{
-            coefficient_length = co.length;
+        for (int i = 0; i < terms.length; i++) {
+            if (terms[i].contains("x")) {
+                String[] parts = terms[i].split("x");
+                this.coefficients[i] = parts[0].isEmpty() ? 1 : Double.parseDouble(parts[0]);
+                this.exponents[i] = parts.length > 1 ? Integer.parseInt(parts[1].substring(1)) : 1;
+            } else {
+                this.coefficients[i] = Double.parseDouble(terms[i]);
+                this.exponents[i] = 0;
+            }
         }
-        //taking coefficient_length as the value of the longest co array length
-
-        double[] result_co = new double[coefficient_length];
-
-        for(int i = 0; i < another.co.length; i++){
-            result_co[i] += another.co[i];
-        }
-        //adding the coefficient in another polynomial to the empty result_co
-
-        for(int t = 0; t < co.length; t++){
-            result_co[t] += co[t];
-        }
-        //adding the coefficient of the original polynomial to another polynomial
-
-        return new Polynomial(result_co);
     }
-    /*a method named add that takes one argument of type Polynomial and returns the polynomial resulting from adding the
-     calling object and the argument*/
 
-    public double evaluate(double x){
+    public double evaluate(double x) {
         double result = 0.0;
-        double power_num = 1.0;
-
-        for(double co : co){
-            result += co * power_num;
-            power_num *= x;
+        for (int i = 0; i < coefficients.length; i++) {
+            result += coefficients[i] * Math.pow(x, exponents[i]);
         }
-        //iterates over the coefficient double arrya and multiply each coefficient by power of x
-
         return result;
     }
-    /*a method named evaluate that takes one argument of type double representing a value of x and evaluates the polynom
-    ial accordingly. For example, if the polynomial is 6 − 2𝑥 + 5𝑥3 and evaluate(-1) is invoked,
-    the result should be 3*/
 
-    public boolean hasRoot(double x){
-        return evaluate(x) == 0.0;
+    public boolean hasRoot(double x) {
+        return Math.abs(evaluate(x)) < 1e-10;
     }
-    /*a method named hasRoot that takes one argument of type double and determines whether this value is a root of the
-    polynomial or not. Note that a root is a value of x for which the polynomial evaluates to zero.*/
 
+    public Polynomial add(Polynomial p) {
+        // For simplicity, we'll just sum terms with like exponents. 
+        double[] newCoefficients = new double[coefficients.length + p.coefficients.length];
+        int[] newExponents = new int[exponents.length + p.exponents.length];
 
+        int index = 0;
+        for (int i = 0; i < coefficients.length; i++) {
+            newCoefficients[index] = coefficients[i];
+            newExponents[index] = exponents[i];
+            index++;
+        }
+
+        for (int i = 0; i < p.coefficients.length; i++) {
+            boolean found = false;
+            for (int j = 0; j < exponents.length; j++) {
+                if (p.exponents[i] == exponents[j]) {
+                    newCoefficients[j] += p.coefficients[i];
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                newCoefficients[index] = p.coefficients[i];
+                newExponents[index] = p.exponents[i];
+                index++;
+            }
+        }
+
+        return new Polynomial(newCoefficients, newExponents);
+    }
+
+    public Polynomial multiply(Polynomial p) {
+        // Multiply every term with every other term
+        double[] newCoefficients = new double[coefficients.length * p.coefficients.length];
+        int[] newExponents = new int[exponents.length * p.exponents.length];
+
+        int index = 0;
+        for (int i = 0; i < coefficients.length; i++) {
+            for (int j = 0; j < p.coefficients.length; j++) {
+                newCoefficients[index] = coefficients[i] * p.coefficients[j];
+                newExponents[index] = exponents[i] + p.exponents[j];
+                index++;
+            }
+        }
+
+        // Combine terms with like exponents
+        for (int i = 0; i < newExponents.length; i++) {
+            for (int j = i + 1; j < newExponents.length; j++) {
+                if (newExponents[i] == newExponents[j]) {
+                    newCoefficients[i] += newCoefficients[j];
+                    newCoefficients[j] = 0;
+                }
+            }
+        }
+
+        return new Polynomial(newCoefficients, newExponents);
+    }
+
+    public void saveToFile(String filename) throws IOException {
+        PrintWriter writer = new PrintWriter(filename);
+        for (int i = 0; i < coefficients.length; i++) {
+            if (coefficients[i] != 0) {
+                if (i != 0 && coefficients[i] > 0) {
+                    writer.print("+");
+                }
+                if (exponents[i] == 0 || (coefficients[i] != 1 && coefficients[i] != -1)) {
+                    writer.print(coefficients[i]);
+                } else if (coefficients[i] == -1) {
+                    writer.print("-");
+                }
+                if (exponents[i] != 0) {
+                    writer.print("x");
+                    if (exponents[i] != 1) {
+                        writer.print("^" + exponents[i]);
+                    }
+                }
+            }
+        }
+        writer.close();
+    }
 }
